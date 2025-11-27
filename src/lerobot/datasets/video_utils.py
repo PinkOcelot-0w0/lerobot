@@ -304,9 +304,9 @@ def encode_video_frames(
     imgs_dir: Path | str,
     video_path: Path | str,
     fps: int,
-    vcodec: str = "libsvtav1",
+    vcodec: str = "h264_nvenc",
     pix_fmt: str = "yuv420p",
-    g: int | None = 2,
+    g: int | None = 30,
     crf: int | None = 30,
     fast_decode: int = 0,
     log_level: int | None = av.logging.ERROR,
@@ -315,8 +315,8 @@ def encode_video_frames(
 ) -> None:
     """More info on ffmpeg arguments tuning on `benchmark/video/README.md`"""
     # Check encoder availability
-    if vcodec not in ["h264", "hevc", "libsvtav1"]:
-        raise ValueError(f"Unsupported video codec: {vcodec}. Supported codecs are: h264, hevc, libsvtav1.")
+    if vcodec not in ["h264_nvenc", "hevc", "libsvtav1"]:
+        raise ValueError(f"Unsupported video codec: {vcodec}. Supported codecs are: h264_nvenc, hevc, libsvtav1.")
 
     video_path = Path(video_path)
     imgs_dir = Path(imgs_dir)
