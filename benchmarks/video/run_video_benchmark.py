@@ -42,8 +42,7 @@ from lerobot.datasets.video_utils import (
     decode_video_frames,
     encode_video_frames,
 )
-from lerobot.utils.constants import OBS_IMAGE
-from lerobot.utils.utils import TimerManager
+from lerobot.utils.benchmark import TimeBenchmark
 
 BASE_ENCODING = OrderedDict(
     [
@@ -120,7 +119,7 @@ def save_first_episode(imgs_dir: Path, dataset: LeRobotDataset) -> None:
     hf_dataset = dataset.hf_dataset.with_format(None)
 
     # We only save images from the first camera
-    img_keys = [key for key in hf_dataset.features if key.startswith(OBS_IMAGE)]
+    img_keys = [key for key in hf_dataset.features if key.startswith("observation.image")]
     imgs_dataset = hf_dataset.select_columns(img_keys[0])
 
     for i, item in enumerate(
