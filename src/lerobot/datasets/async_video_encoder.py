@@ -83,9 +83,9 @@ class AsyncVideoEncoder:
 
     def __init__(
         self,
-        vcodec: str = "h264_nvenc",
+        vcodec: str = "libsvtav1",
         pix_fmt: str = "yuv420p",
-        g: int | None = 30,
+        g: int | None = 2,
         crf: int | None = 30,
         fast_decode: int = 0,
     ):
