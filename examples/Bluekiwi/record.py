@@ -29,10 +29,10 @@ from lerobot.utils.utils import log_say
 from lerobot.utils.visualization_utils import init_rerun
 from lerobot.datasets.video_utils import VideoEncodingManager
 
-NUM_EPISODES = 3
+NUM_EPISODES = 50
 FPS = 30
-EPISODE_TIME_SEC = 45
-RESET_TIME_SEC = 1
+EPISODE_TIME_SEC = 120
+RESET_TIME_SEC = 8
 TASK_DESCRIPTION = "Put the green tissues in the box."
 # 使用当前日期和时间命名
 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
