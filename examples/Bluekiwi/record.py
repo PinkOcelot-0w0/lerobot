@@ -64,7 +64,6 @@ dataset = LeRobotDataset.create(
     robot_type=robot.name,
     use_videos=True,
     image_writer_threads=4,
-    vcodec="h264_nvenc",
     async_video_encoding=True,
     video_encoding_queue_size=100,
 )
