@@ -27,8 +27,8 @@ from lerobot.utils.utils import log_say
 from lerobot.utils.visualization_utils import init_rerun
 
 NUM_EPISODES = 1
-FPS = 10
-EPISODE_TIME_SEC = 60
+FPS = 30
+EPISODE_TIME_SEC = 150
 TASK_DESCRIPTION = "Put the green tissues in the box."
 HF_MODEL_ID = "models/smolvla"  # 改为你的 SmolVLA 模型路径
 HF_DATASET_ID = "pinkocelot/il_gym_smolvla_eval"
@@ -124,7 +124,7 @@ while recorded_episodes < NUM_EPISODES and not events["stop_recording"]:
         continue
 
     # Save episode
-    dataset.save_episode()
+    #dataset.save_episode()
     recorded_episodes += 1
 
 # Clean up
@@ -132,5 +132,5 @@ log_say("Stop recording")
 robot.disconnect()
 listener.stop()
 
-dataset.finalize()
-dataset.push_to_hub()
+#dataset.finalize()
+#dataset.push_to_hub()
