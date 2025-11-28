@@ -56,9 +56,9 @@ class LeKiwiHostConfig:
     port_zmq_observations: int = 5556
 
     # Duration of the application
-    connection_time_s: int = 6000000000
+    connection_time_s: int = 600000
     # Watchdog: stop the robot if no command is received for over 0.5 seconds.
-    watchdog_timeout_ms: int = 60000000000
+    watchdog_timeout_ms: int = 600000000
 
     # If robot jitters decrease the frequency and monitor cpu load with `top` in cmd
     max_loop_freq_hz: int = 30
@@ -91,5 +91,5 @@ class LeKiwiClientConfig(RobotConfig):
 
     cameras: dict[str, CameraConfig] = field(default_factory=lekiwi_cameras_config)
 
-    polling_timeout_ms: int = 6000000000
-    connect_timeout_s: int = 6000000000
+    polling_timeout_ms: int = 600000000
+    connect_timeout_s: int = 600000
