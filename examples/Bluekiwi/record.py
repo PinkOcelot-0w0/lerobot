@@ -31,15 +31,16 @@ from lerobot.datasets.video_utils import VideoEncodingManager
 
 NUM_EPISODES = 50
 FPS = 30
-EPISODE_TIME_SEC = 120
-RESET_TIME_SEC = 8
-TASK_DESCRIPTION = "Put the green tissues in the box."
+EPISODE_TIME_SEC = 300
+RESET_TIME_SEC = 0
+TASK_DESCRIPTION = "Grab a tissue and place it in front of the box. Then open the lid, place it on the right side of the box, put the tissue inside, and close the lid again."
 # 使用当前日期和时间命名
 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-HF_REPO_ID = f"PinkOcelot/lekiwi_vla_{current_time}"
+HF_REPO_ID = f"PinkOcelot/lekiwi_box_{current_time}"
 
 # Create the robot and teleoperator configurations
 robot_config = LeKiwiClientConfig(remote_ip="192.168.31.203", id="my_awesome_kiwi")
+
 leader_arm_config = SO100LeaderConfig(port="COM4", id="my_awesome_leader_arm")
 keyboard_config = KeyboardTeleopConfig()
 

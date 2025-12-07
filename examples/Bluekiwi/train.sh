@@ -2,4 +2,4 @@ lerobot-train --dataset.repo_id=PinkOcelot/lekiwi_vladata --policy.type=smolvla 
 
 lerobot-train --dataset.repo_id=PinkOcelot/lekiwi_vladata --policy.type=act --output_dir=outputs/act_model --job_name=act --policy.device=cuda --wandb.enable=false --policy.repo_id=${HF_USER}/act_policy --batch_size=8 --steps=100000 --save_freq=10000
 
-python -m lerobot.async_inference.policy_server --host=192.168.1.104 --port=8080
+python -m lerobot.async_inference.policy_server --host=192.168.31.201 --port=8080
