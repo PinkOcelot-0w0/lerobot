@@ -76,9 +76,6 @@ dependencies = [
     "pyserial>=3.5,<4.0",
     "wandb>=0.20.0,<0.22.0", # TODO: Bumb dependency (compatible with protobuf)
 
-    "torch>=2.2.1",
-    "torchvision>=0.21.0",
-
     "draccus==0.10.0", # TODO: Remove ==
     "gymnasium>=1.1.1,<2.0.0",
     "rerun-sdk>=0.24.0,<0.27.0",
