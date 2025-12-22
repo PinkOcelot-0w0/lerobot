@@ -405,7 +405,6 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
         ),
     )
 
-<<<<<<< HEAD
     if cfg.resume:
         dataset = LeRobotDataset(
             cfg.dataset.repo_id,
@@ -480,17 +479,6 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                 control_time_s=cfg.dataset.episode_time_s,
                 single_task=cfg.dataset.single_task,
                 display_data=cfg.display_data,
-=======
-    dataset = None
-    listener = None
-
-    try:
-        if cfg.resume:
-            dataset = LeRobotDataset(
-                cfg.dataset.repo_id,
-                root=cfg.dataset.root,
-                batch_encoding_size=cfg.dataset.video_encoding_batch_size,
->>>>>>> upstream/main
             )
 
             if hasattr(robot, "cameras") and len(robot.cameras) > 0:
