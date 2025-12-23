@@ -506,22 +506,14 @@ def get_repo_versions(repo_id: str) -> list[packaging.version.Version]:
 
 
 def get_safe_version(repo_id: str, version: str | packaging.version.Version) -> str:
-    """Return the specified version if available on repo, or the latest compatible one.
+    """Return a usable revision for the dataset, relaxing tag enforcement.
 
-    If the exact version is not found, it looks for the latest version with the
-    same major version number that is less than or equal to the target minor version.
+    Preference order:
+    1) Exact version tag if present (e.g., v3.0)
+    2) Latest compatible tag within same major and <= minor
+    3) Fallback to branch "main" with a warning (no exceptions)
 
-    Args:
-        repo_id (str): The repository ID on the Hugging Face Hub.
-        version (str | packaging.version.Version): The target version.
-
-    Returns:
-        str: The safe version string (e.g., "v1.2.3") to use as a revision.
-
-    Raises:
-        RevisionNotFoundError: If the repo has no version tags.
-        BackwardCompatibilityError: If only older major versions are available.
-        ForwardCompatibilityError: If only newer major versions are available.
+    This bypasses strict tag requirements to improve usability.
     """
     target_version = (
         packaging.version.parse(version) if not isinstance(version, packaging.version.Version) else version
@@ -529,17 +521,10 @@ def get_safe_version(repo_id: str, version: str | packaging.version.Version) -> 
     hub_versions = get_repo_versions(repo_id)
 
     if not hub_versions:
-        raise RevisionNotFoundError(
-            f"""Your dataset must be tagged with a codebase version.
-            Assuming _version_ is the codebase_version value in the info.json, you can run this:
-            ```python
-            from huggingface_hub import HfApi
-
-            hub_api = HfApi()
-            hub_api.create_tag("{repo_id}", tag="_version_", repo_type="dataset")
-            ```
-            """
+        logging.warning(
+            f"No version tags found for {repo_id}. Falling back to 'main' branch."
         )
+        return "main"
 
     if target_version in hub_versions:
         return f"v{target_version}"
@@ -550,16 +535,16 @@ def get_safe_version(repo_id: str, version: str | packaging.version.Version) -> 
     if compatibles:
         return_version = max(compatibles)
         if return_version < target_version:
-            logging.warning(f"Revision {version} for {repo_id} not found, using version v{return_version}")
+            logging.warning(
+                f"Revision {version} for {repo_id} not found, using version v{return_version}"
+            )
         return f"v{return_version}"
 
-    lower_major = [v for v in hub_versions if v.major < target_version.major]
-    if lower_major:
-        raise BackwardCompatibilityError(repo_id, max(lower_major))
-
-    upper_versions = [v for v in hub_versions if v > target_version]
-    assert len(upper_versions) > 0
-    raise ForwardCompatibilityError(repo_id, min(upper_versions))
+    # If no compatible tags exist, fall back to 'main' instead of raising.
+    logging.warning(
+        f"No compatible tags for {repo_id} (requested {version}). Falling back to 'main'."
+    )
+    return "main"
 
 
 def get_hf_features_from_features(features: dict) -> datasets.Features:
