@@ -79,6 +79,7 @@ from lerobot.datasets.video_utils import (
 from lerobot.utils.constants import HF_LEROBOT_HOME
 
 CODEBASE_VERSION = "v3.0"
+VALID_VIDEO_CODECS = {"h264", "hevc", "libsvtav1"}
 
 
 class LeRobotDatasetMetadata:
@@ -547,11 +548,13 @@ class LeRobotDatasetMetadata:
         return obj
 
 
-def _encode_video_worker(video_key: str, episode_index: int, root: Path, fps: int) -> Path:
+def _encode_video_worker(
+    video_key: str, episode_index: int, root: Path, fps: int, vcodec: str = "libsvtav1"
+) -> Path:
     temp_path = Path(tempfile.mkdtemp(dir=root)) / f"{video_key}_{episode_index:03d}.mp4"
     fpath = DEFAULT_IMAGE_PATH.format(image_key=video_key, episode_index=episode_index, frame_index=0)
     img_dir = (root / fpath).parent
-    encode_video_frames(img_dir, temp_path, fps, overwrite=True)
+    encode_video_frames(img_dir, temp_path, fps, vcodec=vcodec, overwrite=True)
     shutil.rmtree(img_dir)
     return temp_path
 
@@ -690,6 +693,8 @@ class LeRobotDataset(torch.utils.data.Dataset):
                 libsvtav1 is the default but has a greater up front cost for a smaller file size. h264 is much faster up front to encode by perhaps 4x, but makes a larger file.
         """
         super().__init__()
+        if vcodec not in VALID_VIDEO_CODECS:
+            raise ValueError(f"Invalid vcodec '{vcodec}'. Must be one of: {sorted(VALID_VIDEO_CODECS)}")
         self.repo_id = repo_id
         self.root = Path(root) if root else HF_LEROBOT_HOME / repo_id
         self.image_transforms = image_transforms
@@ -700,6 +705,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
         self.video_backend = video_backend if video_backend else get_safe_default_codec()
         self.delta_indices = None
         self.episodes_since_last_encoding = 0
+        self.vcodec = vcodec
 
         # Unused attributes
         self.image_writer = None
@@ -1593,6 +1599,8 @@ class LeRobotDataset(torch.utils.data.Dataset):
         vcodec: str = "libsvtav1",
     ) -> "LeRobotDataset":
         """Create a LeRobot Dataset from scratch in order to record data."""
+        if vcodec not in VALID_VIDEO_CODECS:
+            raise ValueError(f"Invalid vcodec '{vcodec}'. Must be one of: {sorted(VALID_VIDEO_CODECS)}")
         obj = cls.__new__(cls)
         obj.meta = LeRobotDatasetMetadata.create(
             repo_id=repo_id,
@@ -1608,6 +1616,7 @@ class LeRobotDataset(torch.utils.data.Dataset):
         obj.tolerance_s = tolerance_s
         obj.image_writer = None
         obj.episodes_since_last_encoding = 0
+        obj.vcodec = vcodec
 
         if image_writer_processes or image_writer_threads:
             obj.start_image_writer(image_writer_processes, image_writer_threads)
