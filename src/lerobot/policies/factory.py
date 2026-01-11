@@ -107,10 +107,6 @@ def get_policy_class(name: str) -> type[PreTrainedPolicy]:
         from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
 
         return SmolVLAPolicy
-    elif name == "modular_smolvla":
-        from lerobot.policies.smolvla.modeling_smolvla import ModularSmolVLAPolicy
-
-        return ModularSmolVLAPolicy
     elif name == "sarm":
         from lerobot.policies.sarm.modeling_sarm import SARMRewardModel
 

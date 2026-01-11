@@ -34,22 +34,7 @@ def make_optimizer_and_scheduler(
     Returns:
         tuple[Optimizer, LRScheduler | None]: The couple (Optimizer, Scheduler). Scheduler can be `None`.
     """
-    # Check if policy has custom trainable parameters method (for modular policies)
-    if hasattr(policy, 'get_optim_params') and callable(policy.get_optim_params):
-        try:
-            params = policy.get_optim_params()
-            # If get_optim_params returns a list/generator, use it directly
-            if not isinstance(params, dict):
-                params_list = list(params) if hasattr(params, '__iter__') else [params]
-                if params_list:  # Only use if non-empty
-                    params = params_list
-                else:
-                    params = policy.parameters()
-        except Exception:
-            params = policy.parameters()
-    else:
-        params = policy.get_optim_params() if cfg.use_policy_training_preset else policy.parameters()
-    
+    params = policy.get_optim_params() if cfg.use_policy_training_preset else policy.parameters()
     if cfg.optimizer is None:
         raise ValueError("Optimizer config is required but not provided in TrainPipelineConfig")
     optimizer = cfg.optimizer.build(params)
