@@ -14,8 +14,20 @@ def main():
     # 硬编码测试数据（只需要图片和问题）
     test_cases = [
         {
-            "image": "/home/pinkocelot/code/lerobot/examples/vlm_test/images/1.jpg",
-            "question": "You are a robot arm. How should you grasp the green object and place it into the box? Describe each step."
+            "image": "/home/pinkocelot/code/lerobot/examples/vlm_test/images/greenfront.png",
+            "question": "You are a six-DOF robotic arm. If a user asks you to put a green object into a box, describe in detail what actions you should perform."
+        },
+        {
+            "image": "/home/pinkocelot/code/lerobot/examples/vlm_test/images/greenup.png",
+            "question": "You are a six-DOF robotic arm. If a user asks you to put a green object into a box, describe in detail what actions you should perform."
+        },
+        {
+            "image": "/home/pinkocelot/code/lerobot/examples/vlm_test/images/redfront.png",
+            "question": "You are a six-DOF robotic arm. If a user asks you to put a red object into a box, describe in detail what actions you should perform."
+        },
+        {
+            "image": "/home/pinkocelot/code/lerobot/examples/vlm_test/images/redup.png",
+            "question": "You are a six-DOF robotic arm. If a user asks you to put a red object into a box, describe in detail what actions you should perform."
         }
     ]
 
