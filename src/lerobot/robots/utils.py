@@ -82,6 +82,10 @@ def make_robot_from_config(config: RobotConfig) -> Robot:
         from .kinova_gen3 import KinovaGen3
 
         return KinovaGen3(config)
+    elif config.type == "kinova_gen3_sim":
+        from .kinova_gen3 import KinovaGen3Sim
+
+        return KinovaGen3Sim(config)
     elif config.type == "mock_robot":
         from tests.mocks.mock_robot import MockRobot
 
