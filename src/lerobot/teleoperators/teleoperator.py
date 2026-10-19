@@ -41,6 +41,9 @@ class Teleoperator(abc.ABC):
     # Set these in ALL subclasses
     config_class: builtins.type[TeleoperatorConfig]
     name: str
+    # Some teleoperators (e.g. pose-based VR controllers) need the follower's
+    # latest state before converting input into actions.
+    requires_feedback: bool = False
 
     def __init__(self, config: TeleoperatorConfig):
         self.id = config.id

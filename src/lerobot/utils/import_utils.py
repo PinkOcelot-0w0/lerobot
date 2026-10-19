@@ -151,6 +151,7 @@ _motorbridge_smart_servo_available = is_package_available(
 )
 _unitree_sdk_available = is_package_available("unitree-sdk2py", "unitree_sdk2py")
 _mujoco_available = is_package_available("mujoco")
+_xrobotoolkit_sdk_available = is_package_available("xrobotoolkit-sdk", "xrobotoolkit_sdk")
 _pyrealsense2_available = is_package_available("pyrealsense2") or is_package_available(
     "pyrealsense2-macosx", import_name="pyrealsense2"
 )

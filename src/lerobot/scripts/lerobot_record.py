@@ -142,6 +142,7 @@ from lerobot.teleoperators import (  # noqa: F401
     bi_rebot_102_leader,
     bi_so_leader,
     homunculus,
+    kinova_gen3_quest3,
     kinova_gen3_so101_leader,
     koch_leader,
     make_teleoperator_from_config,
@@ -321,7 +322,7 @@ def record_loop(
             # Get action from teleop
             if isinstance(teleop, Teleoperator):
                 act = teleop.get_action()
-                if robot.name == "unitree_g1":
+                if robot.name == "unitree_g1" or teleop.requires_feedback:
                     teleop.send_feedback(obs)
 
                 # Applies a pipeline to the raw teleop action, default is IdentityProcessor

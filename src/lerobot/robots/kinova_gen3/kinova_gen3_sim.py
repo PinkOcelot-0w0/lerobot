@@ -4,16 +4,15 @@ import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
-from lerobot.utils.import_utils import _mujoco_available, require_package
 
 from ..robot import Robot
 from .config_kinova_gen3_sim import KinovaGen3SimConfig
+from .mujoco_model import load_kinova_gen3_mujoco_model
 
 logger = logging.getLogger(__name__)
 
@@ -77,32 +76,14 @@ class KinovaGen3Sim(Robot):
         del calibrate
         if self.is_connected:
             raise DeviceAlreadyConnectedError(f"{self} already connected")
-        if not _mujoco_available:
-            require_package("mujoco", "kinova_gen3_sim")
         import mujoco
 
-        models_dir = Path(__file__).resolve().parent / "models"
-        arm_xml = self.config.model_xml or models_dir / "kinova_gen3" / "scene.xml"
-        gripper_xml = self.config.gripper_xml or models_dir / "robotiq_2f85" / "2f85.xml"
-        arm_xml = arm_xml.expanduser().resolve()
-        gripper_xml = gripper_xml.expanduser().resolve()
-        if not arm_xml.is_file():
-            raise FileNotFoundError(f"Kinova MuJoCo model not found: {arm_xml}")
-        if not gripper_xml.is_file():
-            raise FileNotFoundError(f"Robotiq 2F-85 MuJoCo model not found: {gripper_xml}")
         if self.config.simulation_timestep <= 0:
             raise ValueError("simulation_timestep must be greater than zero")
         if self.config.viewer_sync_hz <= 0:
             raise ValueError("viewer_sync_hz must be greater than zero")
 
-        arm_spec = mujoco.MjSpec.from_file(str(arm_xml))
-        gripper_spec = mujoco.MjSpec.from_file(str(gripper_xml))
-        pinch_site = arm_spec.site("pinch_site")
-        if pinch_site is None:
-            raise ValueError(f"The Kinova model has no 'pinch_site' for attaching the gripper: {arm_xml}")
-        arm_spec.attach(gripper_spec, site=pinch_site, prefix="gripper_")
-
-        self.model = arm_spec.compile()
+        self.model = load_kinova_gen3_mujoco_model(self.config.model_xml, self.config.gripper_xml)
         self.model.opt.timestep = self.config.simulation_timestep
         self.data = mujoco.MjData(self.model)
         self._joint_qpos_addresses = []
@@ -129,7 +110,8 @@ class KinovaGen3Sim(Robot):
         for name in self.config.render_cameras:
             camera_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, name)
             if camera_id < 0:
-                raise ValueError(f"No MuJoCo camera named {name!r} in {arm_xml}")
+                model_name = self.config.model_xml or "packaged Gen3 scene"
+                raise ValueError(f"No MuJoCo camera named {name!r} in {model_name}")
             camera_ids.append((name, camera_id))
 
         home_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_KEY, "home")
@@ -174,7 +156,7 @@ class KinovaGen3Sim(Robot):
             daemon=True,
         )
         self._simulation_thread.start()
-        logger.info("%s connected using model %s", self, arm_xml)
+        logger.info("%s connected using model %s", self, self.config.model_xml or "packaged Gen3 scene")
 
     def disconnect(self) -> None:
         if not self.is_connected:

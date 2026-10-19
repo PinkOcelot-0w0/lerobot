@@ -113,6 +113,7 @@ from lerobot.teleoperators import (  # noqa: F401
     gamepad,
     homunculus,
     keyboard,
+    kinova_gen3_quest3,
     kinova_gen3_so101_leader,
     koch_leader,
     make_teleoperator_from_config,
@@ -204,7 +205,7 @@ def teleop_loop(
                 # given that it is the identity processor as default
                 obs = robot.get_observation()
 
-                if robot.name == "unitree_g1":
+                if robot.name == "unitree_g1" or teleop.requires_feedback:
                     teleop.send_feedback(obs)
 
             with timer.section("teleop"):

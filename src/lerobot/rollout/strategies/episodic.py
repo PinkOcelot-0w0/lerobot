@@ -188,6 +188,8 @@ class EpisodicStrategy(RolloutStrategy):
                                     teleop.disable_torque()
                                 else:
                                     logger.info("Smooth handover: sliding follower to teleop position")
+                                    if teleop.requires_feedback:
+                                        teleop.send_feedback(obs)
                                     teleop_action = teleop.get_action()
                                     processed = ctx.processors.teleop_action_processor((teleop_action, obs))
                                     target = ctx.processors.robot_action_processor((processed, obs))
@@ -324,6 +326,8 @@ class EpisodicStrategy(RolloutStrategy):
             obs = robot.get_observation()
 
             if teleop is not None:
+                if teleop.requires_feedback:
+                    teleop.send_feedback(obs)
                 act = teleop.get_action()
                 act_teleop = processors.teleop_action_processor((act, obs))
                 robot_action = processors.robot_action_processor((act_teleop, obs))
