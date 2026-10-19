@@ -69,7 +69,7 @@ def _teleop_flags(args: argparse.Namespace) -> list[str]:
 
 
 def _robot_flags(args: argparse.Namespace, target: str) -> list[str]:
-    flags = [f"--robot.ip={args.robot_ip}"]
+    flags: list[str] = []
     if target == "sim":
         flags.extend(["--robot.type=kinova_gen3_sim", f"--robot.show_viewer={str(not args.headless).lower()}"])
         if args.camera == "wrist":
@@ -78,6 +78,7 @@ def _robot_flags(args: argparse.Namespace, target: str) -> list[str]:
         flags.extend(
             [
                 "--robot.type=kinova_gen3",
+                f"--robot.ip={args.robot_ip}",
                 f"--robot.max_joint_speed_deg_s={args.max_joint_speed_deg_s}",
             ]
         )
