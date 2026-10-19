@@ -95,6 +95,7 @@ from dataclasses import asdict, dataclass
 from pprint import pformat
 
 from lerobot.cameras import CameraConfig  # noqa: F401
+from lerobot.cameras.kinova_gen3_vision import KinovaGen3VisionCameraConfig  # noqa: F401
 from lerobot.cameras.opencv import OpenCVCameraConfig  # noqa: F401
 from lerobot.cameras.reachy2_camera import Reachy2CameraConfig  # noqa: F401
 from lerobot.cameras.realsense import RealSenseCameraConfig  # noqa: F401
@@ -123,6 +124,7 @@ from lerobot.robots import (  # noqa: F401
     bi_so_follower,
     earthrover_mini_plus,
     hope_jr,
+    kinova_gen3,
     koch_follower,
     make_robot_from_config,
     omx_follower,
@@ -140,6 +142,7 @@ from lerobot.teleoperators import (  # noqa: F401
     bi_rebot_102_leader,
     bi_so_leader,
     homunculus,
+    kinova_gen3_so101_leader,
     koch_leader,
     make_teleoperator_from_config,
     omx_leader,

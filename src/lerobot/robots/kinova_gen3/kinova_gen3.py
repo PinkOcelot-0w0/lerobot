@@ -1,10 +1,12 @@
 import contextlib
+import copy
 import logging
 import os
 import threading
 import time
 from typing import Any
 
+from lerobot.cameras import make_cameras_from_configs
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
 
 from ..robot import Robot
@@ -37,8 +39,8 @@ class KinovaGen3(Robot):
     """Kinova Gen3 high-level joint position teleop endpoint.
 
     The robot receives desired positions from LeRobot and internally streams
-    proportional joint velocities through Kortex. No cameras or dataset logic
-    are part of this device.
+    proportional joint velocities through Kortex. Optional camera streams are
+    exposed as live observations for teleoperation visualization.
     """
 
     config_class = KinovaGen3Config
@@ -47,6 +49,14 @@ class KinovaGen3(Robot):
     def __init__(self, config: KinovaGen3Config):
         super().__init__(config)
         self.config = config
+        camera_configs = {}
+        default_stream = "rtsp://192.168.1.10/color"
+        for name, camera_config in config.cameras.items():
+            if camera_config.type == "kinova_gen3_vision" and camera_config.index_or_path == default_stream:
+                camera_config = copy.copy(camera_config)
+                camera_config.index_or_path = f"rtsp://{config.ip}/color"
+            camera_configs[name] = camera_config
+        self.cameras = make_cameras_from_configs(camera_configs)
         self.transport = None
         self.router = None
         self.base = None
@@ -67,11 +77,14 @@ class KinovaGen3(Robot):
 
     @property
     def observation_features(self) -> dict[str, type]:
-        return {**{f"joint_id_{i}.pos": float for i in range(7)}, "gripper.pos": float}
+        features = {**{f"joint_id_{i}.pos": float for i in range(7)}, "gripper.pos": float}
+        features.update({name: (camera.height, camera.width, 3) for name, camera in self.cameras.items()})
+        return features
 
     @property
     def action_features(self) -> dict[str, type]:
-        return self.observation_features.copy()
+        # Images belong to observations only; actions are joint/gripper targets.
+        return {**{f"joint_id_{i}.pos": float for i in range(7)}, "gripper.pos": float}
 
     @property
     def is_connected(self) -> bool:
@@ -113,6 +126,33 @@ class KinovaGen3(Robot):
             self._gripper_target = gripper
         mode = base_pb2.ServoingModeInformation(servoing_mode=base_pb2.SINGLE_LEVEL_SERVOING)
         self.base.SetServoingMode(mode)
+        if self.cameras:
+            from kortex_api.autogen.client_stubs.DeviceManagerClientRpc import DeviceManagerClient
+            from kortex_api.autogen.client_stubs.VisionConfigClientRpc import VisionConfigClient
+
+            device_manager = DeviceManagerClient(self.router)
+            vision_config = VisionConfigClient(self.router)
+            try:
+                for camera in self.cameras.values():
+                    if camera.config.type == "kinova_gen3_vision":
+                        camera.connect(vision_config, device_manager)
+                    else:
+                        camera.connect()
+            except BaseException:
+                for camera in self.cameras.values():
+                    if camera.is_connected:
+                        with contextlib.suppress(Exception):
+                            camera.disconnect()
+                if self.session_manager is not None:
+                    with contextlib.suppress(Exception):
+                        _, router_options_cls, _, _, _, _, _ = _kortex()
+                        self.session_manager.CloseSession(router_options_cls())
+                with contextlib.suppress(Exception):
+                    self.transport.disconnect()
+                self.base = None
+                self.transport = None
+                self.session_manager = None
+                raise
         self._connected = True
         self._start_measure_thread()
         self._start_tracker_thread()
@@ -123,6 +163,10 @@ class KinovaGen3(Robot):
             return
         self._tracker_stop.set()
         self._measure_stop.set()
+        for camera in self.cameras.values():
+            if camera.is_connected:
+                with contextlib.suppress(Exception):
+                    camera.disconnect()
         for thread in (self._tracker_thread, self._measure_thread):
             if thread:
                 thread.join(timeout=2.0)
@@ -155,7 +199,10 @@ class KinovaGen3(Robot):
         with self._state_lock:
             joints = self._joint_positions.copy()
             gripper = self._gripper_position
-        return {**{f"joint_id_{i}.pos": joints[i] for i in range(7)}, "gripper.pos": gripper}
+        observation = {**{f"joint_id_{i}.pos": joints[i] for i in range(7)}, "gripper.pos": gripper}
+        for name, camera in self.cameras.items():
+            observation[name] = camera.async_read(timeout_ms=500)
+        return observation
 
     def send_action(self, action: dict[str, Any]) -> dict[str, Any]:
         if not self.is_connected:

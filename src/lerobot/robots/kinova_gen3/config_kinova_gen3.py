@@ -1,4 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from lerobot.cameras import CameraConfig
 
 from ..config import RobotConfig
 
@@ -25,3 +27,4 @@ class KinovaGen3Config(RobotConfig):
     gripper_deadband: float = 0.01
     gripper_max_speed: float = 0.75
     no_op: bool = False
+    cameras: dict[str, CameraConfig] = field(default_factory=dict)

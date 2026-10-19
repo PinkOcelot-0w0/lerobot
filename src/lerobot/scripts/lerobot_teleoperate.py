@@ -74,6 +74,7 @@ import time
 from dataclasses import asdict, dataclass
 from pprint import pformat
 
+from lerobot.cameras.kinova_gen3_vision import KinovaGen3VisionCameraConfig  # noqa: F401
 from lerobot.cameras.opencv import OpenCVCameraConfig  # noqa: F401
 from lerobot.cameras.realsense import RealSenseCameraConfig  # noqa: F401
 from lerobot.cameras.zmq import ZMQCameraConfig  # noqa: F401
