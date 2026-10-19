@@ -47,6 +47,15 @@ Usage examples
         --robot.port=/dev/ttyACM0 \\
         --task="pick up cube" --duration=30
 
+    # Kinova Gen3 with a compatible LeRobot policy and integrated camera
+    lerobot-rollout \\
+        --strategy.type=base \\
+        --policy.path=user/kinova_gen3_policy \\
+        --robot.type=kinova_gen3 \\
+        --robot.ip=192.168.1.10 \\
+        --robot.cameras="{wrist: {type: kinova_gen3_vision, width: 640, height: 480, fps: 30}}" \\
+        --task="pick up the object" --duration=30
+
     # Interactive session: the robot stays idle until /start is typed, then /subtask,
     # /vqa, /autosteer, /reset and /stop drive the run from stdin. With
     # --strategy.type=sentry it also records, labeling frames with their task.
@@ -169,6 +178,7 @@ import threading
 from collections.abc import Callable
 from typing import cast
 
+from lerobot.cameras.kinova_gen3_vision import KinovaGen3VisionCameraConfig  # noqa: F401
 from lerobot.cameras.opencv import OpenCVCameraConfig  # noqa: F401
 from lerobot.cameras.realsense import RealSenseCameraConfig  # noqa: F401
 from lerobot.cameras.zmq import ZMQCameraConfig  # noqa: F401
@@ -181,6 +191,7 @@ from lerobot.robots import (  # noqa: F401
     bi_so_follower,
     earthrover_mini_plus,
     hope_jr,
+    kinova_gen3,
     koch_follower,
     lekiwi,
     omx_follower,
@@ -205,6 +216,7 @@ from lerobot.teleoperators import (  # noqa: F401
     bi_rebot_102_leader,
     bi_so_leader,
     homunculus,
+    kinova_gen3_so101_leader,
     koch_leader,
     omx_leader,
     openarm_leader,
