@@ -1,4 +1,5 @@
 import logging
+import threading
 from typing import Any
 
 import numpy as np
@@ -28,6 +29,7 @@ class KinovaGen3Quest3(Teleoperator):
         self.config = config
         self._xr = None
         self._connected = False
+        self._state_lock = threading.RLock()
         self._mujoco = None
         self._model = None
         self._data = None
