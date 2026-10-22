@@ -135,8 +135,8 @@ class KinovaGen3Quest3(Teleoperator):
             xrt.init()
         except Exception as exc:
             raise RuntimeError(
-                "Could not initialize XRoboToolkit. Install xrobotoolkit-sdk, start XRoboToolkit "
-                "PC Service, and connect the headset before starting teleoperation."
+                "Could not initialize XRoboToolkit. Install xrobotoolkit-sdk, open XRoboToolkit "
+                "so it can manage its PC Service, and connect the headset before teleoperation."
             ) from exc
         self._xr = xrt
         self._connected = True
@@ -223,7 +223,10 @@ class KinovaGen3Quest3(Teleoperator):
         if np.linalg.norm(raw_pose[3:7]) < 1e-8:
             logger.warning("Ignoring Quest controller pose with a zero-length quaternion")
             return None
+        # Horizontal controller-to-end-effector translation is reversed on
+        # this setup; the vertical axis already has the expected direction.
         position = self._world_from_headset() @ raw_pose[:3]
+        position[:2] *= -1.0
         rotation = self._quaternion_to_matrix(raw_pose[3:7])
         world_from_headset = self._world_from_headset()
         rotation = world_from_headset @ rotation @ world_from_headset.T
@@ -250,6 +253,8 @@ class KinovaGen3Quest3(Teleoperator):
         if self.config.control_orientation:
             delta_world_rotation = controller_rotation @ self._previous_controller_rotation.T
             delta_rotation = self._rotation_log(delta_world_rotation) * self.config.orientation_scale
+            # The mapped pitch component (world Y) is reversed on this setup.
+            delta_rotation[1] *= -1.0
             angle = float(np.linalg.norm(delta_rotation))
             if angle > self.config.max_controller_rotation_rad:
                 delta_rotation *= self.config.max_controller_rotation_rad / angle
