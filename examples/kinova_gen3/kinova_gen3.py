@@ -5,38 +5,22 @@ from __future__ import annotations
 
 import argparse
 import shlex
-import socket
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 KINOVA_IP_DEFAULT = "192.168.1.10"
-PC_SERVICE_SCRIPT_DEFAULT = Path("/opt/apps/roboticsservice/runService.sh")
-PC_SERVICE_HOST_DEFAULT = "127.0.0.1"
-PC_SERVICE_PORT_DEFAULT = 60061
-
-
 def _add_teleop_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--teleop", choices=("quest3", "so101"), default="quest3")
     parser.add_argument("--teleop-port", help="SO-ARM101 serial port; required with --teleop so101")
     parser.add_argument("--quest-position-scale", type=float, default=1.2)
+    parser.add_argument("--quest-orientation-scale", type=float, default=1.0)
     parser.add_argument(
-        "--pc-service-script",
-        type=Path,
-        default=PC_SERVICE_SCRIPT_DEFAULT,
-        help="XRoboToolkit PC Service launcher script",
-    )
-    parser.add_argument("--pc-service-host", default=PC_SERVICE_HOST_DEFAULT)
-    parser.add_argument("--pc-service-port", type=int, default=PC_SERVICE_PORT_DEFAULT)
-    parser.add_argument(
-        "--no-start-pc-service",
+        "--position-only",
         action="store_true",
-        help="Require XRoboToolkit PC Service to already be running",
+        help="Disable Quest rotation tracking to diagnose Cartesian position mapping",
     )
-
-
 def _add_robot_args(parser: argparse.ArgumentParser, *, hardware: bool = False) -> None:
     parser.add_argument("--robot-ip", default=KINOVA_IP_DEFAULT)
     parser.add_argument(
@@ -65,7 +49,7 @@ def _add_dataset_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--episodes", type=int, default=10)
     parser.add_argument("--episode-seconds", type=float, default=30.0)
     parser.add_argument("--reset-seconds", type=float, default=10.0)
-    parser.add_argument("--fps", type=int, default=30)
+    parser.add_argument("--fps", type=int, default=60)
     parser.add_argument("--push-to-hub", action="store_true", help="Upload the finished dataset")
 
 
@@ -77,7 +61,14 @@ def _add_target_args(parser: argparse.ArgumentParser) -> None:
 
 def _teleop_flags(args: argparse.Namespace) -> list[str]:
     if args.teleop == "quest3":
-        return ["--teleop.type=kinova_gen3_quest3", f"--teleop.position_scale={args.quest_position_scale}"]
+        flags = [
+            "--teleop.type=kinova_gen3_quest3",
+            f"--teleop.position_scale={args.quest_position_scale}",
+            f"--teleop.orientation_scale={args.quest_orientation_scale}",
+        ]
+        if args.position_only:
+            flags.append("--teleop.control_orientation=false")
+        return flags
     if not args.teleop_port:
         raise ValueError("--teleop-port is required when --teleop=so101")
     return [
@@ -117,75 +108,12 @@ def _run(module: str, flags: list[str], *, dry_run: bool = False) -> int:
     return subprocess.run(command, cwd=REPO_ROOT, check=False).returncode
 
 
-def _pc_service_is_ready(host: str, port: int) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=0.5):
-            return True
-    except OSError:
-        return False
-
-
-def _ensure_pc_service(args: argparse.Namespace) -> None:
-    """Reuse a running XRoboToolkit service or start the configured launcher."""
-    host = args.pc_service_host
-    port = args.pc_service_port
-    if _pc_service_is_ready(host, port):
-        print(f"XRoboToolkit PC Service is available at {host}:{port}", flush=True)
-        return
-
-    if args.no_start_pc_service:
-        raise ValueError(
-            f"XRoboToolkit PC Service is not responding at {host}:{port}; start it first "
-            "or omit --no-start-pc-service."
-        )
-
-    service_script = args.pc_service_script.expanduser()
-    if not service_script.is_file():
-        raise ValueError(
-            f"XRoboToolkit PC Service is not responding at {host}:{port}, and launcher "
-            f"{service_script} was not found. Install XRoboToolkit PC Service or pass "
-            "--pc-service-script /path/to/runService.sh."
-        )
-
-    service_log = Path("/tmp/lerobot-xrobotoolkit-pc-service.log")
-    log_file = service_log.open("ab", buffering=0)
-    try:
-        subprocess.Popen(
-            ["bash", str(service_script.resolve())],
-            cwd=service_script.resolve().parent,
-            stdin=subprocess.DEVNULL,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-    except OSError as exc:
-        log_file.close()
-        raise ValueError(f"Failed to start XRoboToolkit PC Service: {exc}") from exc
-    log_file.close()
-
-    print(f"Starting XRoboToolkit PC Service from {service_script} ...", flush=True)
-    deadline = time.monotonic() + 20.0
-    while time.monotonic() < deadline:
-        if _pc_service_is_ready(host, port):
-            print(f"XRoboToolkit PC Service is ready at {host}:{port}", flush=True)
-            return
-        time.sleep(0.25)
-    raise ValueError(
-        f"XRoboToolkit PC Service did not respond at {host}:{port} after 20 seconds. "
-        f"Check {service_log} for startup output."
-    )
-
-
 def _run_teleoperation(args: argparse.Namespace, target: str) -> int:
-    if args.teleop == "quest3" and not args.dry_run:
-        _ensure_pc_service(args)
     flags = _robot_flags(args, target) + _teleop_flags(args) + [f"--fps={args.fps}"]
     return _run("lerobot.scripts.lerobot_teleoperate", flags, dry_run=args.dry_run)
 
 
 def _run_record(args: argparse.Namespace) -> int:
-    if args.teleop == "quest3" and not args.dry_run:
-        _ensure_pc_service(args)
     if args.push_to_hub and not args.repo_id:
         raise ValueError("--repo-id must be provided when --push-to-hub is enabled")
     repo_id = args.repo_id or f"local/kinova_gen3_{args.target}"
@@ -235,13 +163,13 @@ def build_parser() -> argparse.ArgumentParser:
     sim = subparsers.add_parser("sim", help="teleoperate the MuJoCo Gen3 + Robotiq model")
     _add_robot_args(sim)
     _add_teleop_args(sim)
-    sim.add_argument("--fps", type=int, default=30)
+    sim.add_argument("--fps", type=int, default=60)
     sim.set_defaults(run=lambda args: _run_teleoperation(args, "sim"))
 
     real = subparsers.add_parser("real", help="teleoperate the physical Kinova Gen3")
     _add_robot_args(real, hardware=True)
     _add_teleop_args(real)
-    real.add_argument("--fps", type=int, default=30)
+    real.add_argument("--fps", type=int, default=60)
     real.set_defaults(run=lambda args: _run_teleoperation(args, "real"))
 
     record = subparsers.add_parser("record", help="collect a LeRobot dataset")
@@ -255,7 +183,7 @@ def build_parser() -> argparse.ArgumentParser:
     rollout.add_argument("--policy", required=True, help="Local checkpoint path or Hub model id")
     rollout.add_argument("--task", default="Run the trained Kinova task")
     rollout.add_argument("--duration", type=float, default=30.0)
-    rollout.add_argument("--fps", type=int, default=30)
+    rollout.add_argument("--fps", type=int, default=60)
     rollout.add_argument("--inference", choices=("sync", "rtc", "remote"), default="sync")
     rollout.add_argument("--device", help="Inference device, e.g. cuda or cpu")
     rollout.set_defaults(run=_run_rollout)

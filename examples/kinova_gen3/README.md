@@ -8,7 +8,7 @@ Install the optional simulation and Quest3 dependencies when needed:
 pip install -e ".[quest3]"
 ```
 
-Quest3 uses the XRoboToolkit Python SDK. Keep XRoboToolkit PC Service running and connect the headset before launching the commands below. SO-ARM101 control uses the serial port connected to the leader arm.
+Quest3 uses the XRoboToolkit Python SDK. Start XRoboToolkit and connect the headset before launching the commands below; XRoboToolkit manages its PC Service. The LeRobot launcher does not start or manage that service. SO-ARM101 control uses the serial port connected to the leader arm.
 
 ## MuJoCo teleoperation
 
@@ -23,6 +23,8 @@ python examples/kinova_gen3/kinova_gen3.py sim --teleop so101 --teleop-port /dev
 ```
 
 The MuJoCo viewer opens by default. Add `--camera wrist --display-data` to render and display the wrist camera, or `--headless` to suppress the viewer.
+Quest control runs at 60 Hz by default for lower input latency; override with `--fps` if needed.
+If a pure left/right controller motion causes diagonal wrist drift, first compare with `--position-only`; this separates position-axis mapping from orientation tracking in the IK target.
 
 ## Real Gen3 teleoperation
 

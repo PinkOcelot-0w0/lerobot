@@ -40,6 +40,8 @@ class KinovaGen3Quest3(Teleoperator):
         self._joint_actuator_ids: list[int] = []
         self._measured_joint_deg = np.zeros(7, dtype=np.float64)
         self._measured_gripper = 0.0
+        self._held_joint_target_deg: np.ndarray | None = None
+        self._clutch_was_active = False
         self._target_controller_pos: np.ndarray | None = None
         self._target_controller_rotation: np.ndarray | None = None
         self._target_ee_pos: np.ndarray | None = None
@@ -165,6 +167,8 @@ class KinovaGen3Quest3(Teleoperator):
                 key = f"joint_id_{index}.pos"
                 if key in feedback:
                     self._measured_joint_deg[index] = float(feedback[key])
+            if self._held_joint_target_deg is None:
+                self._held_joint_target_deg = self._measured_joint_deg.copy()
             if "gripper.pos" in feedback:
                 self._measured_gripper = float(np.clip(feedback["gripper.pos"], 0.0, 1.0))
             self._set_model_joint_state(self._measured_joint_deg)
@@ -177,7 +181,9 @@ class KinovaGen3Quest3(Teleoperator):
         gripper_trigger = float(self._xr.get_right_trigger())
         if not np.isfinite(gripper_trigger):
             gripper_trigger = 1.0 - self._measured_gripper
-        measured = self._measured_joint_deg.copy()
+        if self._held_joint_target_deg is None:
+            self._held_joint_target_deg = self._measured_joint_deg.copy()
+        joint_target = self._held_joint_target_deg.copy()
 
         if clutch >= self.config.clutch_threshold:
             pose = self._read_controller_pose()
@@ -189,17 +195,23 @@ class KinovaGen3Quest3(Teleoperator):
                     self._target_controller_rotation = controller_rotation
                     self._previous_controller_pos = controller_pos
                     self._previous_controller_rotation = controller_rotation
-                    measured = self._measured_joint_deg.copy()
                 else:
                     self._apply_controller_delta(controller_pos, controller_rotation)
                     target_joints = self._solve_ik()
-                    delta = target_joints - measured
+                    delta = target_joints - self._measured_joint_deg
                     delta = np.clip(delta, -self.config.max_joint_step_deg, self.config.max_joint_step_deg)
-                    measured = measured + delta
+                    joint_target = self._measured_joint_deg + delta
+                    self._held_joint_target_deg = joint_target.copy()
+            self._clutch_was_active = True
         else:
+            if self._clutch_was_active:
+                # Latch the measured pose once on clutch release. Keep sending
+                # this target while idle so gravity cannot drag the arm down.
+                self._held_joint_target_deg = self._measured_joint_deg.copy()
+            self._clutch_was_active = False
             self._clear_clutch_reference()
 
-        action = {f"joint_id_{i}.pos": float(measured[i]) for i in range(7)}
+        action = {f"joint_id_{i}.pos": float(joint_target[i]) for i in range(7)}
         action["gripper.pos"] = float(np.clip(1.0 - gripper_trigger, 0.0, 1.0))
         return action
 

@@ -24,7 +24,9 @@ class KinovaGen3Quest3Config(TeleoperatorConfig):
     ik_damping: float = 0.04
     orientation_weight: float = 0.35
     max_controller_delta_m: float = 0.08
-    max_joint_step_deg: float = 3.0
+    # Per-sample IK setpoint slew limit. At 60 Hz this allows up to 360 deg/s;
+    # the real robot's own velocity cap remains a separate safety limit.
+    max_joint_step_deg: float = 6.0
     max_controller_rotation_rad: float = 0.35
     position_deadband_m: float = 0.001
     rotation_deadband_rad: float = 0.01
