@@ -20,11 +20,12 @@ class KinovaGen3Config(RobotConfig):
     # The high-level position tracker sends joint velocities at this rate.
     control_rate_hz: float = 50.0
     position_gain: float = 1.5
-    max_joint_speed_deg_s: float = 20.0
+    # Conservative default. KinovaGen3 enforces a separate 5 deg/s software ceiling.
+    max_joint_speed_deg_s: float = 3.0
     joint_deadband_deg: float = 0.5
     gripper_rate_hz: float = 20.0
     gripper_gain: float = 0.15
     gripper_deadband: float = 0.01
-    gripper_max_speed: float = 0.75
+    gripper_max_speed: float = 0.2
     no_op: bool = False
     cameras: dict[str, CameraConfig] = field(default_factory=dict)

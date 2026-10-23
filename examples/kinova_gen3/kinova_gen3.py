@@ -11,6 +11,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 KINOVA_IP_DEFAULT = "192.168.1.10"
+
+
 def _add_teleop_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--teleop", choices=("quest3", "so101"), default="quest3")
     parser.add_argument("--teleop-port", help="SO-ARM101 serial port; required with --teleop so101")
@@ -21,6 +23,8 @@ def _add_teleop_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Disable Quest rotation tracking to diagnose Cartesian position mapping",
     )
+
+
 def _add_robot_args(parser: argparse.ArgumentParser, *, hardware: bool = False) -> None:
     parser.add_argument("--robot-ip", default=KINOVA_IP_DEFAULT)
     parser.add_argument(
@@ -30,13 +34,15 @@ def _add_robot_args(parser: argparse.ArgumentParser, *, hardware: bool = False) 
         help="Use the Kinova wrist camera as an observation",
     )
     parser.add_argument("--display-data", action="store_true", help="Show observations in Rerun")
-    parser.add_argument("--dry-run", action="store_true", help="Print the LeRobot command without starting it")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Print the LeRobot command without starting it"
+    )
     if hardware:
         parser.add_argument(
             "--max-joint-speed-deg-s",
             type=float,
-            default=5.0,
-            help="Kinova joint speed cap for initial real-robot testing",
+            default=3.0,
+            help="Conservative Kinova joint speed cap in deg/s (software ceiling: 3)",
         )
     else:
         parser.add_argument("--headless", action="store_true", help="Run MuJoCo without its viewer window")
@@ -56,7 +62,7 @@ def _add_dataset_args(parser: argparse.ArgumentParser) -> None:
 def _add_target_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--target", choices=("sim", "real"), default="sim")
     _add_robot_args(parser)
-    parser.add_argument("--max-joint-speed-deg-s", type=float, default=5.0)
+    parser.add_argument("--max-joint-speed-deg-s", type=float, default=3.0)
 
 
 def _teleop_flags(args: argparse.Namespace) -> list[str]:
@@ -80,7 +86,9 @@ def _teleop_flags(args: argparse.Namespace) -> list[str]:
 def _robot_flags(args: argparse.Namespace, target: str) -> list[str]:
     flags: list[str] = []
     if target == "sim":
-        flags.extend(["--robot.type=kinova_gen3_sim", f"--robot.show_viewer={str(not args.headless).lower()}"])
+        flags.extend(
+            ["--robot.type=kinova_gen3_sim", f"--robot.show_viewer={str(not args.headless).lower()}"]
+        )
         if args.camera == "wrist":
             flags.append("--robot.render_cameras=[wrist]")
     else:

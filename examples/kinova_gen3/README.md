@@ -28,13 +28,12 @@ If a pure left/right controller motion causes diagonal wrist drift, first compar
 
 ## Real Gen3 teleoperation
 
-Start with the built-in low speed cap and verify motion direction before increasing it:
+The launcher starts at 3 deg/s. The driver rejects configured limits above 3 deg/s and independently clamps every joint-speed command to that ceiling. It also sends stop commands if measurements become invalid or stale or a command fails. Start with the default and verify motion direction in a clear workspace:
 
 ```bash
 python examples/kinova_gen3/kinova_gen3.py real \
   --robot-ip 192.168.1.10 \
-  --teleop quest3 \
-  --max-joint-speed-deg-s 5
+  --teleop quest3
 ```
 
 ## Dataset collection
