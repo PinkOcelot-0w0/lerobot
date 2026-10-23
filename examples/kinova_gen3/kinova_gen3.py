@@ -1,5 +1,13 @@
 #!/usr/bin/env python
-"""Convenience launcher for Kinova Gen3 simulation, teleoperation and rollout."""
+"""Convenience launcher for Kinova Gen3 simulation, teleoperation and rollout.
+# Quest3 控制 MuJoCo 仿真                       python examples/kinova_gen3/kinova_gen3.py sim --teleop quest3
+# Quest3 控制 Gen3 实机，默认关节速度上限 3°/秒   python examples/kinova_gen3/kinova_gen3.py real --robot-ip 192.168.1.10 --teleop quest3
+# Quest3 控制仿真并采集数据                      python examples/kinova_gen3/kinova_gen3.py record --target sim --teleop quest3 --episodes 3
+# Quest3 控制实机并采集数据                      python examples/kinova_gen3/kinova_gen3.py record --target real --robot-ip 192.168.1.10 --teleop quest3 --episodes 3
+# 在仿真里运行策略                               python examples/kinova_gen3/kinova_gen3.py rollout --target sim --policy /策略目录
+# 在实机上运行策略                               python examples/kinova_gen3/kinova_gen3.py rollout --target real --robot-ip 192.168.1.10 --policy /策略目录
+# 回放仿真采集的第 0 段数据                      python -m lerobot.scripts.lerobot_replay --robot.type=kinova_gen3_sim --robot.show_viewer=true --dataset.repo_id=local/kinova_gen3_sim --dataset.root=outputs/datasets/kinova_gen3_sim --dataset.episode=0
+"""
 
 from __future__ import annotations
 
