@@ -133,6 +133,7 @@ from lerobot.utils.visualization_utils import (
     log_visualization_data,
     shutdown_visualization,
 )
+from lerobot.vr_teleop_kit.lerobot.kinova_gen3_teleop import KinovaGen3VRTeleoperator  # noqa: F401
 
 
 @dataclass

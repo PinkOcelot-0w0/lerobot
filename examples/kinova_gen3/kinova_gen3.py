@@ -24,6 +24,7 @@ KINOVA_IP_DEFAULT = "192.168.1.10"
 def _add_teleop_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--teleop", choices=("quest3", "so101"), default="quest3")
     parser.add_argument("--teleop-port", help="SO-ARM101 serial port; required with --teleop so101")
+    parser.add_argument("--vr-url", default="ws://127.0.0.1:8443/ws", help="VR WebXR relay WebSocket URL")
     parser.add_argument("--quest-position-scale", type=float, default=1.2)
     parser.add_argument("--quest-orientation-scale", type=float, default=1.0)
     parser.add_argument(
@@ -73,8 +74,17 @@ def _add_target_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-joint-speed-deg-s", type=float, default=3.0)
 
 
-def _teleop_flags(args: argparse.Namespace) -> list[str]:
+def _teleop_flags(args: argparse.Namespace, target: str) -> list[str]:
     if args.teleop == "quest3":
+        if target == "sim":
+            orientation_scale = 0.0 if args.position_only else args.quest_orientation_scale
+            flags = [
+                "--teleop.type=kinova_gen3_vr",
+                f"--teleop.ws_url={args.vr_url}",
+                f"--teleop.scale_translation={args.quest_position_scale}",
+                f"--teleop.scale_rotation={orientation_scale}",
+            ]
+            return flags
         flags = [
             "--teleop.type=kinova_gen3_quest3",
             f"--teleop.position_scale={args.quest_position_scale}",
@@ -125,7 +135,7 @@ def _run(module: str, flags: list[str], *, dry_run: bool = False) -> int:
 
 
 def _run_teleoperation(args: argparse.Namespace, target: str) -> int:
-    flags = _robot_flags(args, target) + _teleop_flags(args) + [f"--fps={args.fps}"]
+    flags = _robot_flags(args, target) + _teleop_flags(args, target) + [f"--fps={args.fps}"]
     return _run("lerobot.scripts.lerobot_teleoperate", flags, dry_run=args.dry_run)
 
 
@@ -134,7 +144,7 @@ def _run_record(args: argparse.Namespace) -> int:
         raise ValueError("--repo-id must be provided when --push-to-hub is enabled")
     repo_id = args.repo_id or f"local/kinova_gen3_{args.target}"
     root = args.root or (REPO_ROOT / "outputs" / "datasets" / f"kinova_gen3_{args.target}")
-    flags = _robot_flags(args, args.target) + _teleop_flags(args)
+    flags = _robot_flags(args, args.target) + _teleop_flags(args, args.target)
     flags.extend(
         [
             f"--dataset.repo_id={repo_id}",

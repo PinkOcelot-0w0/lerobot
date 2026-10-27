@@ -211,6 +211,14 @@ reachy2 = [
 ]
 kinova_gen3_sim = ["mujoco>=3.3.0,<4.0.0"]
 quest3 = ["xrobotoolkit-sdk>=1.1.0,<2.0.0", "lerobot[kinova_gen3_sim]"]
+vr-teleop = [
+    "websockets>=14.0,<16.0",
+    "fastapi>=0.115.0,<1.0.0",
+    "uvicorn>=0.34.0,<1.0.0",
+    "aiortc>=1.13.0,<2.0.0",
+    "lerobot[av-dep]",
+    "lerobot[kinova_gen3_sim]",
+]
 # Seeed Studio reBot B601 follower (motorbridge / CAN) + StarArm102 / reBot Arm 102
 # leader (motorbridge-smart-servo / FashionStar UART servos).
 rebot = ["lerobot[motorbridge-dep]", "lerobot[motorbridge-smart-servo-dep]"]
@@ -403,6 +411,7 @@ lerobot-setup-can="lerobot.scripts.lerobot_setup_can:main"
 lerobot-annotate="lerobot.scripts.lerobot_annotate:main"
 lerobot-rollout="lerobot.scripts.lerobot_rollout:main"
 lerobot-policy-server="lerobot.scripts.lerobot_policy_server:main"
+vr-teleop-relay="lerobot.vr_teleop_kit.relay.server:main"
 
 # ---------------- Tool Configurations ----------------
 
@@ -433,6 +442,8 @@ lerobot = [
     "configs/recipes/*.yaml",
     "robots/kinova_gen3/models/**/*.xml",
     "robots/kinova_gen3/models/**/*.stl",
+    "vr_teleop_kit/relay/web/*.html",
+    "vr_teleop_kit/relay/web/*.js",
 ]
 
 [tool.setuptools.packages.find]

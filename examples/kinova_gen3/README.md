@@ -8,9 +8,20 @@ Install the optional simulation and Quest3 dependencies when needed:
 pip install -e ".[quest3]"
 ```
 
-Quest3 uses the XRoboToolkit Python SDK. Start XRoboToolkit and connect the headset before launching the commands below; XRoboToolkit manages its PC Service. The LeRobot launcher does not start or manage that service. SO-ARM101 control uses the serial port connected to the leader arm.
+Quest3 simulation uses the WebXR VR teleop kit and its local relay. Physical Gen3 control still uses the XRoboToolkit Python SDK; start XRoboToolkit and connect the headset before real-robot commands so it can manage its PC Service. SO-ARM101 control uses the serial port connected to the leader arm.
 
 ## MuJoCo teleoperation
+
+Quest3 simulation uses the WebXR VR teleop kit. Start its relay in another terminal:
+
+```bash
+vr-teleop-relay
+```
+
+For USB, forward the relay port with `adb reverse tcp:8443 tcp:8443`, then open
+`http://localhost:8443/` in the Quest browser. For LAN use, start the relay with
+HTTPS certificates and open its HTTPS URL in the headset. The physical Gen3
+command below continues to use the existing XRoboToolkit teleoperator.
 
 ```bash
 python examples/kinova_gen3/kinova_gen3.py sim --teleop quest3
@@ -23,7 +34,7 @@ python examples/kinova_gen3/kinova_gen3.py sim --teleop so101 --teleop-port /dev
 ```
 
 The MuJoCo viewer opens by default. Add `--camera wrist --display-data` to render and display the wrist camera, or `--headless` to suppress the viewer.
-Quest control runs at 60 Hz by default for lower input latency; override with `--fps` if needed.
+The simulation relay defaults to `ws://127.0.0.1:8443/ws`; override with `--vr-url` if the relay is on another host. Quest control runs at 60 Hz by default; override with `--fps` if needed.
 If a pure left/right controller motion causes diagonal wrist drift, first compare with `--position-only`; this separates position-axis mapping from orientation tracking in the IK target.
 
 ## Real Gen3 teleoperation
