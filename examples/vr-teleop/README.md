@@ -32,14 +32,17 @@ Then open `http://localhost:8443/` in the Quest browser. For LAN access, use
 the relay's HTTPS options and open the corresponding `https://<host-ip>:8443/`
 URL in the headset.
 
-The current examples and IK are still DK1-specific. Kinova Gen3 support will
-use the same relay and WebXR page through a separate Kinova IK adapter. The
-Kinova simulation entry point is:
+The standalone `pure_sim.py` and `teleop_bi_dk1.py` examples still use DK1.
+The Kinova launcher uses the same relay and WebXR page through a dedicated
+7-DoF Gen3 IK and teleoperator adapter. Its simulation entry point is:
 
 ```bash
 python examples/kinova_gen3/kinova_gen3.py sim --teleop quest3
 ```
 
-It uses the new WebXR relay and Kinova Gen3 IK. The `real` command continues to
-use the existing XRoboToolkit teleoperator while the simulation path is being
-validated.
+It supports the clutch, precision modifier, home ramp, wrist-pivot calibration,
+reach limits, live IK settings, IK haptics, simulated gripper-resistance haptics,
+and an optional MuJoCo wrist camera streamed into the Quest through WebRTC. The
+gripper-force calibration button calibrates the simulator's tracking-error
+proxy. The `real` command continues to use the existing XRoboToolkit
+teleoperator.

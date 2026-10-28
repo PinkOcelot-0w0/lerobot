@@ -461,7 +461,7 @@
     // Display order — top goes in the middle so left/right wrists flank
     // the main scene camera the way the operator's eyes flank the head.
     // Anything not in the explicit order falls to the end alphabetically.
-    const DISPLAY_ORDER = ["left_wrist", "top", "right_wrist"];
+    const DISPLAY_ORDER = ["left_wrist", "top", "right_wrist", "sim_wrist"];
     const orderRank = (id) => {
       const i = DISPLAY_ORDER.indexOf(id);
       return i < 0 ? DISPLAY_ORDER.length : i;
@@ -489,6 +489,9 @@
         return r !== 0 ? r : a.id.localeCompare(b.id);
       });
       if (camList.length === 0) {
+        teardown();
+        camOverlay.innerHTML = "";
+        for (const key of Object.keys(slots)) delete slots[key];
         append("camera_list: no cameras advertised by server");
         return;
       }
@@ -1322,6 +1325,7 @@
       top:         { x: 0,                              y: Y_MAIN  },
       left_wrist:  { x: -(QUAD_W / 2 + H_GAP / 2),      y: Y_WRIST },
       right_wrist: { x: +(QUAD_W / 2 + H_GAP / 2),      y: Y_WRIST },
+      sim_wrist:   { x: +(QUAD_W / 2 + H_GAP / 2),      y: Y_WRIST },
     };
 
     gl.enable(gl.BLEND);

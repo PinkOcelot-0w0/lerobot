@@ -30,6 +30,8 @@ Run (console script from `pip install vr-teleop-kit[relay]`):
 
 import argparse
 import asyncio
+import base64
+import binascii
 import json
 import logging
 import os
@@ -58,9 +60,13 @@ WEB_DIR = Path(__file__).parent / "web"
 # WebSocket message types broadcast verbatim to every other connected client.
 # Anything not in this set is handled inline (signaling, toggles, ping).
 RELAY_TYPES = {
-    "xr_frame", "ik_state", "config_update", "request_settings",
+    "xr_frame",
+    "ik_state",
+    "config_update",
+    "request_settings",
     # Web UI ↔ teleop: gripper-haptic threshold calibration.
-    "haptic_calibrate", "haptic_calibrate_result",
+    "haptic_calibrate",
+    "haptic_calibrate_result",
 }
 
 
@@ -70,12 +76,15 @@ RELAY_TYPES = {
 # slot. CameraTrack.recv() (called by aiortc at the negotiated fps) reads
 # from the slot. A single reader can fan out to multiple peer connections.
 
+
 @dataclass(frozen=True)
 class CameraSpec:
     """Camera identity + capture parameters. `id` matches the WS schema
     (top | left_wrist | right_wrist); `label` is the human-facing name;
     `rotate` is 0/90/180/270 degrees applied in the capture thread so
-    every consumer sees the corrected frame (no client-side fix-up)."""
+    every consumer sees the corrected frame (no client-side fix-up).
+    """
+
     id: str
     label: str
     device: str
@@ -87,7 +96,7 @@ class CameraSpec:
 
 # cv2 rotation lookup. 0 → no rotation; other values map to the cv2 constants.
 _ROTATE_CODES = {
-    90:  cv2.ROTATE_90_CLOCKWISE,
+    90: cv2.ROTATE_90_CLOCKWISE,
     180: cv2.ROTATE_180,
     270: cv2.ROTATE_90_COUNTERCLOCKWISE,
 }
@@ -109,12 +118,17 @@ class CameraReader:
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, spec.width)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, spec.height)
         self._cap.set(cv2.CAP_PROP_FPS, spec.fps)
-        self._thread = threading.Thread(
-            target=self._loop, name=f"cam-{spec.id}", daemon=True
-        )
+        self._thread = threading.Thread(target=self._loop, name=f"cam-{spec.id}", daemon=True)
         self._thread.start()
-        logger.info("camera %s opened (%s, %dx%d@%d rotate=%d)",
-                    spec.id, spec.device, spec.width, spec.height, spec.fps, spec.rotate)
+        logger.info(
+            "camera %s opened (%s, %dx%d@%d rotate=%d)",
+            spec.id,
+            spec.device,
+            spec.width,
+            spec.height,
+            spec.fps,
+            spec.rotate,
+        )
 
     def _loop(self) -> None:
         rotate_code = _ROTATE_CODES.get(self.spec.rotate)
@@ -138,10 +152,36 @@ class CameraReader:
         self._cap.release()
 
 
+class VirtualCameraReader:
+    """Latest-frame source populated over the relay WebSocket by a simulator."""
+
+    def __init__(self, spec: CameraSpec) -> None:
+        """Create an empty virtual stream with the advertised camera format."""
+        self.spec = spec
+        self._lock = threading.Lock()
+        self._frame: np.ndarray | None = None
+
+    def update(self, frame: np.ndarray) -> None:
+        """Publish a decoded BGR image as the latest frame."""
+        with self._lock:
+            self._frame = np.ascontiguousarray(frame)
+
+    def latest(self) -> np.ndarray | None:
+        """Return a snapshot of the latest frame, if one has arrived."""
+        with self._lock:
+            return None if self._frame is None else self._frame.copy()
+
+    def stop(self) -> None:
+        """Clear the current frame when the publishing simulator disconnects."""
+        with self._lock:
+            self._frame = None
+
+
 class CameraTrack(VideoStreamTrack):
     """aiortc track that pulls from a CameraReader. `enabled=False` returns
     the previously-sent frame, so H.264's P-frames compress to nothing and
-    the receiver freezes on the last image — no SDP renegotiation needed."""
+    the receiver freezes on the last image — no SDP renegotiation needed.
+    """
 
     kind = "video"
 
@@ -180,6 +220,7 @@ class CameraTrack(VideoStreamTrack):
 # populated from this list (camera_list message on WS open), so missing
 # cameras silently disappear instead of erroring at peer-connect time.
 
+
 def _build_camera_specs() -> list[CameraSpec]:
     width = int(os.environ.get("CAM_WIDTH", "640"))
     height = int(os.environ.get("CAM_HEIGHT", "480"))
@@ -198,8 +239,8 @@ def _build_camera_specs() -> list[CameraSpec]:
         return r
 
     candidates = [
-        ("top",         "Top",         os.environ.get("CAM_TOP"),   _rotate("CAM_TOP_ROTATE")),
-        ("left_wrist",  "Left wrist",  os.environ.get("CAM_LEFT"),  _rotate("CAM_LEFT_ROTATE")),
+        ("top", "Top", os.environ.get("CAM_TOP"), _rotate("CAM_TOP_ROTATE")),
+        ("left_wrist", "Left wrist", os.environ.get("CAM_LEFT"), _rotate("CAM_LEFT_ROTATE")),
         ("right_wrist", "Right wrist", os.environ.get("CAM_RIGHT"), _rotate("CAM_RIGHT_ROTATE")),
     ]
     specs: list[CameraSpec] = []
@@ -216,11 +257,14 @@ def _build_camera_specs() -> list[CameraSpec]:
 
 CAMERA_SPECS: list[CameraSpec] = _build_camera_specs()
 CAMERA_READERS: dict[str, CameraReader] = {}
+SIM_CAMERA_IDS: set[str] = set()
+SIM_CAMERA_OWNERS: dict[str, WebSocket] = {}
 
 
 def _ensure_readers() -> None:
     """Lazy-open the cameras on first WebRTC request. Avoids holding v4l2
-    locks during dev iterations where the operator only wants the relay."""
+    locks during dev iterations where the operator only wants the relay.
+    """
     for spec in CAMERA_SPECS:
         if spec.id in CAMERA_READERS:
             continue
@@ -233,6 +277,7 @@ def _ensure_readers() -> None:
 # ── Codec preference ─────────────────────────────────────────────────────
 # Force H.264 because Quest's hardware video decoder is H.264-strongest.
 # VP8 is software-decoded → higher CPU, worse latency under load.
+
 
 def _prefer_h264(pc: RTCPeerConnection) -> None:
     caps = RTCRtpSender.getCapabilities("video")
@@ -248,11 +293,15 @@ def _prefer_h264(pc: RTCPeerConnection) -> None:
 # Each WS holds its own RTCPeerConnection + the live CameraTracks it added.
 # We key tracks by camera id so camera_toggle messages can flip the right one.
 
+
 @dataclass
 class ClientState:
+    """Per-WebSocket WebRTC negotiation and optional simulator camera ownership."""
+
     ws: WebSocket
     pc: RTCPeerConnection | None = None
     tracks: dict[str, CameraTrack] | None = None  # id -> track
+    sim_cameras: set[str] | None = None
 
 
 _clients: dict[WebSocket, ClientState] = {}
@@ -272,6 +321,7 @@ async def _broadcast(text: str, exclude: WebSocket | None = None) -> None:
 
 # ── FastAPI app ──────────────────────────────────────────────────────────
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
@@ -285,7 +335,8 @@ app = FastAPI(lifespan=lifespan)
 @app.middleware("http")
 async def _no_cache_static(request, call_next):
     """Force-disable browser cache for the page and JS so operators don't
-    have to clear the Quest's cache after every web-asset change."""
+    have to clear the Quest's cache after every web-asset change.
+    """
     response = await call_next(request)
     p = request.url.path
     if p == "/" or p.startswith("/static/"):
@@ -310,6 +361,7 @@ async def index() -> FileResponse:
 #   3. Client sets remote desc, generates *answer*, sends `webrtc_answer`.
 #   4. The client trickles `ice_candidate` messages; the server drops them
 #      (see ws_handler — the offer SDP already carries our candidates).
+
 
 async def _handle_webrtc_request(state: ClientState, msg: dict) -> None:
     if state.pc is not None:
@@ -348,15 +400,18 @@ async def _handle_webrtc_request(state: ClientState, msg: dict) -> None:
     offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
 
-    await state.ws.send_text(json.dumps({
-        "type": "webrtc_offer",
-        "sdp": pc.localDescription.sdp,
-        "sdp_type": pc.localDescription.type,
-        "cameras": [
-            {"id": spec.id, "label": spec.label}
-            for spec in CAMERA_SPECS if spec.id in state.tracks
-        ],
-    }))
+    await state.ws.send_text(
+        json.dumps(
+            {
+                "type": "webrtc_offer",
+                "sdp": pc.localDescription.sdp,
+                "sdp_type": pc.localDescription.type,
+                "cameras": [
+                    {"id": spec.id, "label": spec.label} for spec in CAMERA_SPECS if spec.id in state.tracks
+                ],
+            }
+        )
+    )
 
 
 async def _handle_webrtc_answer(state: ClientState, msg: dict) -> None:
@@ -375,6 +430,95 @@ async def _handle_camera_toggle(state: ClientState, msg: dict) -> None:
         logger.info("camera %s -> %s", cam_id, "on" if enabled else "off")
 
 
+async def _broadcast_camera_list() -> None:
+    """Notify connected Quest pages that the available camera set changed."""
+    payload = json.dumps(
+        {
+            "type": "camera_list",
+            "cameras": [{"id": spec.id, "label": spec.label} for spec in CAMERA_SPECS],
+        }
+    )
+    await asyncio.gather(
+        *(client.send_text(payload) for client in list(_clients)),
+        return_exceptions=True,
+    )
+
+
+async def _register_sim_camera(state: ClientState, msg: dict) -> None:
+    """Register a virtual camera published by the Kinova simulation adapter."""
+    camera_id = str(msg.get("camera_id", ""))
+    if camera_id not in {"sim_wrist", "sim_top"}:
+        logger.warning("rejecting unsupported simulated camera id %r", camera_id)
+        return
+    owner = SIM_CAMERA_OWNERS.get(camera_id)
+    if owner is not None and owner is not state.ws:
+        logger.warning("simulated camera %s already has a publisher", camera_id)
+        return
+    if camera_id not in SIM_CAMERA_IDS:
+        width = int(np.clip(int(msg.get("width", 640)), 16, 1920))
+        height = int(np.clip(int(msg.get("height", 480)), 16, 1080))
+        fps = int(np.clip(int(msg.get("fps", 15)), 1, 30))
+        spec = CameraSpec(
+            camera_id,
+            str(msg.get("label", "Simulated camera"))[:64],
+            f"sim://{camera_id}",
+            width,
+            height,
+            fps,
+            0,
+        )
+        CAMERA_SPECS.append(spec)
+        CAMERA_READERS[camera_id] = VirtualCameraReader(spec)
+        SIM_CAMERA_IDS.add(camera_id)
+        SIM_CAMERA_OWNERS[camera_id] = state.ws
+        logger.info("registered simulated camera %s (%dx%d@%d)", camera_id, width, height, fps)
+        await _broadcast_camera_list()
+    if state.sim_cameras is None:
+        state.sim_cameras = set()
+    state.sim_cameras.add(camera_id)
+
+
+async def _unregister_sim_camera(state: ClientState, camera_id: str) -> None:
+    """Remove a virtual camera when its owning simulation disconnects."""
+    if camera_id not in SIM_CAMERA_IDS or SIM_CAMERA_OWNERS.get(camera_id) is not state.ws:
+        return
+    SIM_CAMERA_IDS.discard(camera_id)
+    SIM_CAMERA_OWNERS.pop(camera_id, None)
+    if state.sim_cameras is not None:
+        state.sim_cameras.discard(camera_id)
+    reader = CAMERA_READERS.pop(camera_id, None)
+    if reader is not None:
+        reader.stop()
+    CAMERA_SPECS[:] = [spec for spec in CAMERA_SPECS if spec.id != camera_id]
+    for state in list(_clients.values()):
+        if state.tracks and camera_id in state.tracks:
+            await _close_pc(state)
+    await _broadcast_camera_list()
+
+
+async def _update_sim_camera(state: ClientState, msg: dict) -> None:
+    """Decode and publish a JPEG frame from the authorized simulation client."""
+    camera_id = str(msg.get("camera_id", ""))
+    reader = CAMERA_READERS.get(camera_id)
+    if (
+        camera_id not in SIM_CAMERA_IDS
+        or SIM_CAMERA_OWNERS.get(camera_id) is not state.ws
+        or not isinstance(reader, VirtualCameraReader)
+    ):
+        return
+    encoded = msg.get("jpeg")
+    if not isinstance(encoded, str) or len(encoded) > 2_000_000:
+        return
+    try:
+        image_bytes = base64.b64decode(encoded, validate=True)
+    except (ValueError, binascii.Error):
+        return
+    image = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None or image.shape[1] != reader.spec.width or image.shape[0] != reader.spec.height:
+        return
+    reader.update(image)
+
+
 async def _close_pc(state: ClientState) -> None:
     if state.pc is None:
         return
@@ -388,6 +532,7 @@ async def _close_pc(state: ClientState) -> None:
 
 # ── WebSocket endpoint ───────────────────────────────────────────────────
 
+
 @app.websocket("/ws")
 async def ws_handler(websocket: WebSocket) -> None:
     await websocket.accept()
@@ -399,10 +544,14 @@ async def ws_handler(websocket: WebSocket) -> None:
     # Tell the client which cameras exist before any signaling starts. The
     # UI uses this to render the toggle row even if the operator hasn't
     # asked for video yet.
-    await websocket.send_text(json.dumps({
-        "type": "camera_list",
-        "cameras": [{"id": s.id, "label": s.label} for s in CAMERA_SPECS],
-    }))
+    await websocket.send_text(
+        json.dumps(
+            {
+                "type": "camera_list",
+                "cameras": [{"id": s.id, "label": s.label} for s in CAMERA_SPECS],
+            }
+        )
+    )
 
     types_seen: dict[str, int] = {}
 
@@ -433,6 +582,12 @@ async def ws_handler(websocket: WebSocket) -> None:
                 pass
             elif t == "camera_toggle":
                 await _handle_camera_toggle(state, msg)
+            elif t == "sim_camera_register":
+                await _register_sim_camera(state, msg)
+            elif t == "sim_camera_unregister":
+                await _unregister_sim_camera(state, str(msg.get("camera_id", "")))
+            elif t == "sim_camera_frame":
+                await _update_sim_camera(state, msg)
             elif t == "latency_report":
                 # Client-side RTT stats from latency mode (?latency=1). Logged
                 # here so transport comparisons (USB vs LAN) can be read off the
@@ -440,9 +595,14 @@ async def ws_handler(websocket: WebSocket) -> None:
                 # (localhost:8443 = USB tether, <lan-ip>:8443 = LAN).
                 logger.info(
                     "latency_report host=%s n=%s mean=%.1f p50=%.1f p95=%.1f min=%.1f max=%.1f ms (one-way~%.1f)",
-                    msg.get("host"), msg.get("n"),
-                    msg.get("mean", 0.0), msg.get("p50", 0.0), msg.get("p95", 0.0),
-                    msg.get("min", 0.0), msg.get("max", 0.0), msg.get("p50", 0.0) / 2.0,
+                    msg.get("host"),
+                    msg.get("n"),
+                    msg.get("mean", 0.0),
+                    msg.get("p50", 0.0),
+                    msg.get("p95", 0.0),
+                    msg.get("min", 0.0),
+                    msg.get("max", 0.0),
+                    msg.get("p50", 0.0) / 2.0,
                 )
             else:
                 await websocket.send_json({"echo": msg, "server_time": time.time()})
@@ -451,6 +611,8 @@ async def ws_handler(websocket: WebSocket) -> None:
         logger.info("ws disconnect %s code=%s totals=%s", peer, e.code, types_seen)
     finally:
         await _close_pc(state)
+        for camera_id in list(state.sim_cameras or ()):
+            await _unregister_sim_camera(state, camera_id)
         _clients.pop(websocket, None)
 
 
@@ -459,17 +621,21 @@ app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--host", default="127.0.0.1",
-                    help="Bind address. Use 0.0.0.0 for LAN access.")
+    ap.add_argument("--host", default="127.0.0.1", help="Bind address. Use 0.0.0.0 for LAN access.")
     ap.add_argument("--port", type=int, default=8443)
-    ap.add_argument("--ssl-keyfile",  default=None, help="Path to TLS private key (PEM).")
+    ap.add_argument("--ssl-keyfile", default=None, help="Path to TLS private key (PEM).")
     ap.add_argument("--ssl-certfile", default=None, help="Path to TLS cert chain (PEM).")
     args = ap.parse_args()
 
     import uvicorn
+
     uvicorn.run(
-        app, host=args.host, port=args.port, log_level="info",
-        ssl_keyfile=args.ssl_keyfile, ssl_certfile=args.ssl_certfile,
+        app,
+        host=args.host,
+        port=args.port,
+        log_level="info",
+        ssl_keyfile=args.ssl_keyfile,
+        ssl_certfile=args.ssl_certfile,
     )
 
 

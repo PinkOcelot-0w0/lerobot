@@ -55,7 +55,7 @@ class KinovaGen3IKSolver:
         damping: float = 0.08,
         posture_gain: float = 0.02,
         rest_qpos: np.ndarray | list[float] | None = None,
-        max_joint_step_rad: float = 0.03,
+        max_joint_step_rad: float | list[float] | np.ndarray = 0.03,
         iterations: int = 6,
     ) -> None:
         """Create a solver using the packaged Gen3 and Robotiq model."""
@@ -63,12 +63,17 @@ class KinovaGen3IKSolver:
             raise ValueError("damping must be greater than zero")
         if posture_gain < 0.0:
             raise ValueError("posture_gain must be non-negative")
-        if max_joint_step_rad <= 0.0:
-            raise ValueError("max_joint_step_rad must be greater than zero")
+        step_limit = np.asarray(max_joint_step_rad, dtype=np.float64)
+        if step_limit.ndim == 0:
+            step_limit = np.full(7, float(step_limit), dtype=np.float64)
+        if step_limit.shape != (7,) or not np.all(np.isfinite(step_limit)) or np.any(step_limit <= 0.0):
+            raise ValueError("max_joint_step_rad must be positive finite scalar or length-7 vector")
         if iterations <= 0:
             raise ValueError("iterations must be greater than zero")
 
         self.model, self.data = build_kinova_gen3_model(model_xml, gripper_xml)
+        mujoco.mj_resetData(self.model, self.data)
+        mujoco.mj_forward(self.model, self.data)
         self.joint_ids = np.array(
             [mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, name) for name in KINOVA_JOINT_NAMES],
             dtype=np.int32,
@@ -84,7 +89,7 @@ class KinovaGen3IKSolver:
         self.joint_limits = _GEN3_JOINT_LIMITS.copy()
         self.damping = float(damping)
         self.posture_gain = float(posture_gain)
-        self.max_joint_step_rad = float(max_joint_step_rad)
+        self.max_joint_step_rad = step_limit
         self.iterations = int(iterations)
 
         if rest_qpos is None:
@@ -99,6 +104,8 @@ class KinovaGen3IKSolver:
         self.last_position_error_m = 0.0
         self.last_rotation_error_rad = 0.0
         self.last_joint_limit_pressure = 0.0
+        self.last_singularity_proximity = 0.0
+        self.last_wrist_singularity_proximity = 0.0
 
     def _forward(self, qpos: np.ndarray) -> None:
         qpos = np.asarray(qpos, dtype=np.float64).reshape(7)
@@ -142,6 +149,7 @@ class KinovaGen3IKSolver:
         jac_rotation = np.zeros((3, self.model.nv), dtype=np.float64)
         task_jacobian = np.zeros((6, 7), dtype=np.float64)
         task_error = np.zeros(6, dtype=np.float64)
+        limit_pressure = 0.0
 
         for _ in range(self.iterations):
             self._forward(q)
@@ -162,6 +170,13 @@ class KinovaGen3IKSolver:
             for index, dof_address in enumerate(self.dof_addresses):
                 task_jacobian[:3, index] = jac_position[:, dof_address]
                 task_jacobian[3:, index] = jac_rotation[:, dof_address]
+            singular_values = np.linalg.svd(task_jacobian, compute_uv=False)
+            self.last_singularity_proximity = float(np.clip(1.0 - singular_values[-1] / 0.08, 0.0, 1.0))
+            wrist_jacobian = task_jacobian[3:, 3:]
+            wrist_singular_values = np.linalg.svd(wrist_jacobian, compute_uv=False)
+            self.last_wrist_singularity_proximity = float(
+                np.clip(1.0 - wrist_singular_values[-1] / 0.15, 0.0, 1.0)
+            )
             task_error[:3] = position_error
             task_error[3:] = rotation_error
 
@@ -179,8 +194,12 @@ class KinovaGen3IKSolver:
 
             q_unclipped = q + delta
             q = np.clip(q_unclipped, self.joint_limits[:, 0], self.joint_limits[:, 1])
+            limit_pressure = max(limit_pressure, float(np.linalg.norm(q_unclipped - q)))
 
         total_delta = np.clip(q - q_seed, -self.max_joint_step_rad, self.max_joint_step_rad)
         q_bounded = np.clip(q_seed + total_delta, self.joint_limits[:, 0], self.joint_limits[:, 1])
-        self.last_joint_limit_pressure = float(np.linalg.norm(q_seed + total_delta - q_bounded))
+        self.last_joint_limit_pressure = max(
+            limit_pressure,
+            float(np.linalg.norm(q_seed + total_delta - q_bounded)),
+        )
         return q_bounded
